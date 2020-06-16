@@ -21,10 +21,9 @@ pub mod schema;
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     dotenv::dotenv().ok();
-    match std::env::var("RUST_LOG") {
-        Err(_) => std::env::set_var("RUST_LOG", "warn"),
-        _ => {}
-    };
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "warn")
+    }
 
     env_logger::builder()
         .filter(Some("actix_server::builder"), LevelFilter::Info)
@@ -48,17 +47,16 @@ async fn main() -> std::io::Result<()> {
             .service(footballer_rest_controller::footballer_get)
             .service(footballer_rest_controller::footballer_search)
     })
-        .bind(("0.0.0.0", 8080))?
-        .run()
-        .await
+    .bind(("0.0.0.0", 8080))?
+    .run()
+    .await
 }
 
 pub fn init_pool(connection_string: &str) -> Pool<ConnectionManager<PgConnection>> {
     let connection_manager = ConnectionManager::<PgConnection>::new(connection_string);
-    let connection_pool = Pool::builder()
+    Pool::builder()
         .max_size(5)
         .min_idle(Some(5))
         .build(connection_manager)
-        .expect("Failed to create db connection pool");
-    connection_pool
+        .expect("Failed to create db connection pool")
 }

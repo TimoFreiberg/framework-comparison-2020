@@ -1,9 +1,8 @@
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
 use diesel::r2d2::Pool;
-use diesel::result::Error;
 use diesel::PgConnection;
 
 use crate::footballer::Footballer;
@@ -22,13 +21,9 @@ impl FootballerRepository {
     pub fn create(&self, v_footballer: NewFootballer) -> Result<Footballer, Error> {
         use crate::schema::footballer::dsl::*;
 
-        match diesel::insert_into(footballer)
+        Ok(diesel::insert_into(footballer)
             .values(&v_footballer)
-            .get_result::<Footballer>(self.m_pool.deref().get().unwrap().deref())
-        {
-            Ok(saved_footballer) => Ok(saved_footballer),
-            Err(e) => Err(e.into()),
-        }
+            .get_result::<Footballer>(&*self.m_pool.get()?)?)
     }
 
     /// Find a footballer by its position
@@ -37,7 +32,7 @@ impl FootballerRepository {
 
         let footballers = footballer
             .filter(position.eq(footballer_position))
-            .load::<Footballer>(self.m_pool.deref().get().unwrap().deref())?;
+            .load::<Footballer>(&*self.m_pool.get()?)?;
 
         Ok(footballers)
     }
@@ -48,14 +43,14 @@ impl FootballerRepository {
 
         Ok(footballer
             .filter(id.eq(footballer_id))
-            .first::<Footballer>(self.m_pool.deref().get().unwrap().deref())?)
+            .first::<Footballer>(&*self.m_pool.get()?)?)
     }
 
     /// Find all footballers
     pub fn find_all(&self) -> Result<Vec<Footballer>, Error> {
         use crate::schema::footballer::dsl::*;
 
-        Ok(footballer.load::<Footballer>(self.m_pool.deref().get().unwrap().deref())?)
+        Ok(footballer.load::<Footballer>(&*self.m_pool.get()?)?)
     }
 
     /// Delete a footballer by its id
@@ -63,8 +58,26 @@ impl FootballerRepository {
         use crate::schema::footballer::dsl::*;
 
         let count = diesel::delete(footballer.filter(id.eq(footballer_id)))
-            .execute(self.m_pool.deref().get().unwrap().deref())?;
+            .execute(&*self.m_pool.get()?)?;
 
         Ok(count > 0)
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    DieselError(diesel::result::Error),
+    NoDbConnectionError(r2d2::Error),
+}
+
+impl From<diesel::result::Error> for Error {
+    fn from(e: diesel::result::Error) -> Self {
+        Self::DieselError(e)
+    }
+}
+
+impl From<r2d2::Error> for Error {
+    fn from(e: r2d2::Error) -> Self {
+        Self::NoDbConnectionError(e)
     }
 }
